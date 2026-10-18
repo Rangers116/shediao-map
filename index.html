@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>射雕江湖地理志</title>
+    <!-- MapLibre GL CSS -->
+    <link href="https://unpkg.com/maplibre-gl@4.2.1/dist/maplibre-gl.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
+
+        #map {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+        }
+
+        #sidebar {
+            position: fixed;
+            top: 20px; left: 20px;
+            z-index: 1000;
+            width: 280px;
+            background: rgba(10, 12, 18, 0.92);
+            border: 1px solid rgba(190, 160, 100, 0.4);
+            border-radius: 10px;
+            color: #e8dcc8;
+            padding: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+            max-height: calc(100vh - 120px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        #sidebar h1 {
+            font-size: 18px;
+            color: #f4e6c0;
+            letter-spacing: 2px;
+            margin-bottom: 4px;
+        }
+
+        #sidebar .subtitle {
+            font-size: 12px;
+            color: #a09070;
+            margin-bottom: 12px;
+        }
+
+        #chapter-list {
+            flex: 1;
+            overflow-y: auto;
+            margin: 8px 0;
+            border-top: 1px solid rgba(190, 160, 100, 0.2);
+            border-bottom: 1px solid rgba(190, 160, 100, 0.2);
+            padding: 8px 0;
+        }
+
+        .chapter-item {
+            padding: 5px 8px;
+            cursor: pointer;
+            font-size: 13px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            color: #d8ccb0;
+        }
+        .chapter-item:hover { background: rgba(190, 160, 100, 0.15); }
+        .chapter-item.active {
+            background: rgba(190, 160, 100, 0.3);
+            color: #f4e6c0;
+            font-weight: 600;
+        }
+
+        .controls { margin-top: 10px; }
+
+        .btn {
+            background: #8a6f3d;
+            border: none;
+            color: #f4e6c0;
+            padding: 8px 14px;
+            margin-right: 6px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #a8874a; }
+        .btn:disabled { background: #555; color: #999; cursor: not-allowed; }
+
+        #progress-bar {
+            width: 100%;
+            margin-top: 10px;
+            accent-color: #8a6f3d;
+        }
+
+        .legend {
+            margin-top: 10px;
+            font-size: 11px;
+            color: #a09070;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2px;
+        }
+        .legend span::before {
+            content: "●";
+            margin-right: 4px;
+            font-size: 10px;
+        }
+        .legend .c1::before { color: #ffd700; }
+        .legend .c2::before { color: #50c8e8; }
+        .legend .c3::before { color: #90ee90; }
+        .legend .c4::before { color: #bbbbbb; }
+
+        #info-card {
+            position: fixed;
+            bottom: 40px; left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            width: 460px;
+            max-width: calc(100vw - 40px);
+            background: rgba(10, 12, 18, 0.94);
+            border: 1px solid rgba(190, 160, 100, 0.5);
+            border-radius: 10px;
+            color: #e8dcc8;
+            padding: 14px 18px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.8);
+            display: none;
+        }
+
+        #info-card .close {
+            float: right;
+            cursor: pointer;
+            font-size: 18px;
+            color: #907850;
+            background: none;
+            border: none;
+        }
+        #info-card .close:hover { color: #f4e6c0; }
+
+        #info-card h3 {
+            color: #f4e6c0;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+        #info-card .meta {
+            font-size: 12px;
+            color: #a09070;
+            margin-bottom: 6px;
+        }
+        #info-card .event {
+            font-size: 13px;
+            line-height: 1.6;
+            margin-bottom: 6px;
+        }
+        #info-card .source {
+            font-size: 12px;
+            color: #907850;
+            font-style: italic;
+            border-top: 1px solid rgba(190, 160, 100, 0.2);
+            padding-top: 6px;
+        }
+
+        #hint {
+            position: fixed;
+            top: 20px; right: 20px;
+            z-index: 900;
+            background: rgba(10, 12, 18, 0.8);
+            color: #a09070;
+            font-size: 12px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(190, 160, 100, 0.3);
+            pointer-events: none;
+        }
+
+        .attribution {
+            position: fixed;
+            bottom: 8px; right: 8px;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+            z-index: 900;
+            pointer-events: none;
+        }
+
+        #offline-banner {
+            position: fixed;
+            top: 20px; left: 50%;
+            transform: translateX(-50%);
+            z-index: 1100;
+            background: rgba(120, 80, 30, 0.9);
+            color: #ffd;
+            font-size: 13px;
+            padding: 6px 14px;
+            border-radius: 6px;
+            display: none;
+            pointer-events: none;
+        }
+
+        @media (max-width: 700px) {
+            #sidebar { width: 220px; }
+            #hint { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="sidebar">
+    <h1>射雕江湖地理志</h1>
+    <div class="subtitle">以现代地图重走郭靖的江湖路</div>
+    <div id="chapter-list"></div>
+    <div class="controls">
+        <button class="btn" id="btn-play">▶ 播放</button>
+        <button class="btn" id="btn-prev">←</button>
+        <button class="btn" id="btn-next">→</button>
+    </div>
+    <input type="range" id="progress-bar" min="0" max="0" value="0" step="1">
+    <div class="legend">
+        <span class="c1">确切对应</span>
+        <span class="c2">考证确定</span>
+        <span class="c3">文学推测</span>
+        <span class="c4">纯虚构</span>
+    </div>
+</div>
+
+<div id="info-card">
+    <button class="close" id="info-close">✕</button>
+    <h3 id="info-title"></h3>
+    <div class="meta" id="info-meta"></div>
+    <div class="event" id="info-event"></div>
+    <div class="source" id="info-source"></div>
+</div>
+
+<div id="hint">◀▶ 翻章 &nbsp; 空格 播放/暂停</div>
+<div id="offline-banner">未加载在线瓦片，正在使用内置中国轮廓</div>
+<div class="attribution">© OpenStreetMap Contributors | 射雕江湖地理志 · 非官方同人项目</div>
+
+<!-- MapLibre JS + 数据 + 逻辑 -->
+<script src="https://unpkg.com/maplibre-gl@4.2.1/dist/maplibre-gl.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
